@@ -1,4 +1,5 @@
 import os
+import time
 from urllib import parse
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -10,9 +11,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 
 BASEURL = 'https://megamarket.ru'
+LOCATION = 'Самарская область, Самара'
 
 
-def get_pages_html(url,pages):
+def get_pages_html(url,pages, current_city):
     chrome_install = ChromeDriverManager().install()
 
     folder = os.path.dirname(chrome_install)
@@ -25,11 +27,19 @@ def get_pages_html(url,pages):
     ITEMS = []
     try:
         driver.get(url)
+
+        if current_city:
+            try:
+                change_location(driver)
+            except Exception:
+                print(f"Exeption: Couldn't set location")
+
         replaced_url = driver.current_url
         new_url = replaced_url.rsplit('/', 1)
         new_url = f"{new_url[0]}/page/{new_url[1]}"
+
         for page in range(1, pages+1):
-            print(f"[+] Страница {page}")
+            print(f"[+] Page {page}")
             replaced_url = new_url.replace(f'page', f'page-{page}')
             print(f"Listen on: {replaced_url}")
 
@@ -42,8 +52,8 @@ def get_pages_html(url,pages):
             if not get_items_new(driver.page_source, ITEMS):
                 break
 
-    # except Exception as ex:
-    #     print(f"Exeption: {ex}")
+    except Exception as ex:
+        print(f"Exeption: {ex}")
 
     finally:
         driver.close()
@@ -57,6 +67,16 @@ def write_to_html(html):
         print("written html")
         f.write(html)
         f.close()
+
+
+def change_location(driver : uc.Chrome):
+    driver.find_element(By.XPATH,'/html/body/div[2]/div[1]/div[3]/div[2]/header/div/div[2]/div/div[2]/div/div/div/div/div/div[3]/button[2]').click()
+    driver.find_element(By.XPATH,'/html/body/div[2]/div[1]/div[3]/div[2]/header/div/div[2]/div/div[2]/div/div/div/div/div/div/form/div/div/div/input').click()
+    driver.find_element(By.XPATH,'/html/body/div[2]/div[1]/div[3]/div[2]/header/div/div[2]/div/div[2]/div/div/div/div/div/div/form/div/div/div/input').send_keys(LOCATION)
+    WebDriverWait(driver, 10).until(
+            ec.presence_of_element_located((By.CLASS_NAME, "option")))
+    driver.find_element(By.CLASS_NAME, 'option').click()
+    driver.find_element(By.XPATH,'/html/body/div[2]/div[1]/div[3]/div[2]/header/div/div[2]/div/div[2]/div/div/div/div/div/div/form/button').click()
 
 #only for example
 def get_items(html, items):
@@ -160,15 +180,19 @@ def save_excel(data: list, filename: str):
     writer.sheets['data'].set_column(3, 4, width=20)
     writer.sheets['data'].set_column(4, 5, width=15)
     writer.close()
-    print(f'Все сохранено в {filename}.xlsx')
+    print(f'Saved in {filename}.xlsx')
 
 def main():
     target = input('Введите название товара: ')
+
+    current_city = input('Использвать город Самара?(да, нет): ') 
+
+    current_city = current_city.lower().strip() == 'да'
     
     pages_count = int(input('Введите количество страниц для просмотра: '))
 
     target_url = f"{BASEURL}/catalog/?q={target}"
-    items = get_pages_html(url=target_url, pages= pages_count)
+    items = get_pages_html(url=target_url, pages= pages_count, current_city= current_city)
 
     save_excel(items, target)
 
